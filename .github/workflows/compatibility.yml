@@ -1,0 +1,81 @@
+name: 🔄 Compatibility
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'  # Monthly on the 1st day of each month
+  workflow_dispatch:
+
+jobs:
+  test-latest:
+    runs-on: ubuntu-latest
+
+    name: Test with Latest Dependencies
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
+          coverage: none
+
+      - name: Install latest dependencies
+        run: |
+          composer update --prefer-stable --prefer-dist --no-interaction
+          composer show -D
+
+      - name: Execute tests
+        run: vendor/bin/phpunit --verbose
+
+  test-minimum:
+    runs-on: ubuntu-latest
+
+    name: Test with Minimum Dependencies
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.0
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
+          coverage: none
+
+      - name: Install minimum dependencies
+        run: |
+          composer update --prefer-lowest --prefer-stable --prefer-dist --no-interaction
+          composer show -D
+
+      - name: Execute tests
+        run: vendor/bin/phpunit --verbose
+
+  test-laravel-dev:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    name: Test with Laravel dev-main
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
+          coverage: none
+
+      - name: Install dev dependencies
+        run: |
+          composer require "laravel/framework:dev-main" "orchestra/testbench:dev-main" --no-interaction --no-update
+          composer update --prefer-dist --no-interaction
+          composer show -D
+
+      - name: Execute tests
+        run: vendor/bin/phpunit --verbose

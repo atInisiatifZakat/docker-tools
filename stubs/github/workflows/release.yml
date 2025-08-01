@@ -1,0 +1,39 @@
+name: 🚀 Create Release
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Gunakan Release Drafter untuk auto-generate dan publish release
+      - name: Create and Publish Release
+        uses: release-drafter/release-drafter@v6
+        with:
+          publish: true  # ← Publish immediately, tidak draft
+          name: 'Release $RESOLVED_VERSION'
+          tag: '$RESOLVED_VERSION'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Informasi sukses
+      - name: Release Published Info
+        run: |
+          echo "## 🎉 Release Published!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Release has been automatically created and published!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Details:" >> $GITHUB_STEP_SUMMARY
+          echo "- 🏷️ **Version**: Determined by semver labels on PR" >> $GITHUB_STEP_SUMMARY
+          echo "- 📝 **Content**: Auto-generated from PR changes and categorized" >> $GITHUB_STEP_SUMMARY
+          echo "- � **View Release**: https://github.com/${{ github.repository }}/releases/latest" >> $GITHUB_STEP_SUMMARY

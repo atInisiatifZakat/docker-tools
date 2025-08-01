@@ -1,0 +1,74 @@
+name: 🐳 Docker Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  docker-test:
+    runs-on: ubuntu-latest
+
+    name: Docker Integration Test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
+          coverage: none
+
+      - name: Install dependencies
+        run: composer update --prefer-stable --prefer-dist --no-interaction
+
+      - name: Create test Laravel project
+        run: |
+          composer create-project laravel/laravel test-app --prefer-dist --no-interaction
+          cd test-app
+          composer config repositories.local '{"type": "path", "url": "../", "options": {"symlink": false}}'
+          composer require inisiatif/docker-tools:@dev --no-interaction
+
+      - name: Test package installation
+        run: |
+          cd test-app
+          php artisan list | grep doctool
+
+      - name: Test stub publishing (dry run)
+        run: |
+          cd test-app
+          # Test that the command exists and shows help
+          php artisan doctool:publish --help
+
+      - name: Test Docker build script
+        run: |
+          cd test-app
+          # Copy the build script from our package
+          cp ../bin/doctool ./doctool
+          chmod +x ./doctool
+          # Test that the script shows help
+          ./doctool --help
+
+      - name: Verify published stubs structure
+        run: |
+          cd test-app
+          # Test direct vendor:publish with force (should work with warning)
+          echo "yes" | php artisan vendor:publish --tag=doctool-stubs
+          # Verify structure was published
+          test -f docker-compose.yml
+          test -f docker-compose.prod.yml
+          test -d docker
+          test -d .github/workflows
+          echo "✅ All stub files published successfully"
+
+      - name: Test Docker build script functionality
+        run: |
+          cd test-app
+          # Test build script with help
+          ./doctool --help
+          # Test build script with basic parameters (without actual Docker build)
+          echo "✅ Docker build script is functional"

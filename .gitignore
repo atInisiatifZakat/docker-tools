@@ -1,0 +1,20 @@
+.idea
+.phpunit.result.cache
+.phpunit.cache
+build
+composer.lock
+coverage
+coverage.xml
+docs
+phpstan.neon
+testbench.yaml
+vendor
+node_modules
+
+# Test artifacts
+test-app/
+.env.testing
+.env.example
+
+# CI/CD artifacts
+*.log

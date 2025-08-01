@@ -1,0 +1,169 @@
+name: 🐳 Build Docker Images
+
+on:
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      app_version:
+        description: 'Application version (e.g., v1.2.0)'
+        required: true
+        default: 'v1.0.0'
+      php_version:
+        description: 'PHP version'
+        required: true
+        default: '8.3'
+        type: choice
+        options:
+          - '8.2'
+          - '8.3'
+      deployment_mode:
+        description: 'Deployment mode'
+        required: true
+        default: 'docker-compose'
+        type: choice
+        options:
+          - 'docker-compose'
+          - 'kubernetes'
+      registry:
+        description: 'Docker registry (e.g., docker.io/username)'
+        required: false
+        default: 'docker.io/{{:docker_username}}'
+      push_images:
+        description: 'Push images to registry'
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  build-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: ${{ inputs.push_images == true || github.event_name == 'release' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Determine build parameters
+        id: params
+        run: |
+          # Set version
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ inputs.app_version }}"
+          fi
+
+          # Set PHP version
+          PHP_VER="${{ inputs.php_version }}"
+          if [ -z "$PHP_VER" ]; then
+            PHP_VER="8.3"
+          fi
+
+          # Set deployment mode
+          MODE="${{ inputs.deployment_mode }}"
+          if [ -z "$MODE" ]; then
+            MODE="docker-compose"
+          fi
+
+          # Set registry
+          REGISTRY="${{ inputs.registry }}"
+          if [ -z "$REGISTRY" ] && [ "${{ github.event_name }}" = "release" ]; then
+            REGISTRY="docker.io/{{:docker_username}}"
+          fi
+
+          # Set push flag
+          PUSH="false"
+          if [ "${{ inputs.push_images }}" = "true" ] || [ "${{ github.event_name }}" = "release" ]; then
+            PUSH="true"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "php_version=$PHP_VER" >> $GITHUB_OUTPUT
+          echo "mode=$MODE" >> $GITHUB_OUTPUT
+          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
+          echo "push=$PUSH" >> $GITHUB_OUTPUT
+
+          echo "Build parameters:"
+          echo "- Version: $VERSION"
+          echo "- PHP Version: $PHP_VER"
+          echo "- Mode: $MODE"
+          echo "- Registry: $REGISTRY"
+          echo "- Push: $PUSH"
+
+      - name: Make build script executable
+        run: chmod +x ./scripts/build.sh
+
+      - name: Build Docker Images
+        run: |
+          # Build arguments
+          BUILD_ARGS=""
+          BUILD_ARGS="$BUILD_ARGS --app-version ${{ steps.params.outputs.version }}"
+          BUILD_ARGS="$BUILD_ARGS --php-version ${{ steps.params.outputs.php_version }}"
+          BUILD_ARGS="$BUILD_ARGS --mode ${{ steps.params.outputs.mode }}"
+          BUILD_ARGS="$BUILD_ARGS --app-name {{:docker_username}}/{{:docker_image_name}}"
+
+          # Add registry if pushing
+          if [ "${{ steps.params.outputs.push }}" = "true" ] && [ -n "${{ steps.params.outputs.registry }}" ]; then
+            BUILD_ARGS="$BUILD_ARGS --registry ${{ steps.params.outputs.registry }}"
+          fi
+
+          echo "Running: ./scripts/build.sh $BUILD_ARGS"
+          ./scripts/build.sh $BUILD_ARGS
+
+      - name: Display built images
+        run: |
+          echo "## 🐳 Built Docker Images" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Images created:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # List images
+          docker images | grep "{{:docker_username}}/{{:docker_image_name}}\|{{:docker_image_name}}" | while read line; do
+            echo "- \`$line\`" >> $GITHUB_STEP_SUMMARY
+          done
+
+          if [ "${{ steps.params.outputs.push }}" = "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📤 Images pushed to registry:" >> $GITHUB_STEP_SUMMARY
+            echo "Registry: \`${{ steps.params.outputs.registry }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage examples:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.params.outputs.mode }}" = "docker-compose" ]; then
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "# Run with docker-compose" >> $GITHUB_STEP_SUMMARY
+            echo "docker-compose up -d" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "# Run single HTTP container" >> $GITHUB_STEP_SUMMARY
+            echo "docker run -p 8080:8080 {{:docker_username}}/{{:docker_image_name}}:http-php${{ steps.params.outputs.php_version }}" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "# Deploy to Kubernetes" >> $GITHUB_STEP_SUMMARY
+            echo "kubectl apply -f k8s-deployment.yaml" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "# Run single container with K8s mode" >> $GITHUB_STEP_SUMMARY
+            echo "docker run -e K8S_MODE=true -p 8080:8080 {{:docker_username}}/{{:docker_image_name}}:http-php${{ steps.params.outputs.php_version }}-k8s" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Clean up local images (if not pushing)
+        if: ${{ steps.params.outputs.push != 'true' }}
+        run: |
+          echo "Cleaning up local images..."
+          docker images | grep "{{:docker_username}}/{{:docker_image_name}}\|{{:docker_image_name}}" | awk '{print $3}' | xargs -r docker rmi -f || true
