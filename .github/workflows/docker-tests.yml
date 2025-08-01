@@ -32,16 +32,24 @@ jobs:
           cd test-app
           composer config repositories.local '{"type": "path", "url": "../", "options": {"symlink": false}}'
           composer require inisiatif/docker-tools:@dev --no-interaction
+          # Clear and rebuild Laravel cache
+          php artisan config:clear
+          php artisan cache:clear
+          composer dump-autoload
 
       - name: Test package installation
         run: |
           cd test-app
           echo "=== Checking if package is installed ==="
           composer show inisiatif/docker-tools
+          echo "=== Verifying service provider registration ==="
+          php artisan package:discover --ansi
           echo "=== Listing all artisan commands ==="
           php artisan list
-          echo "=== Checking for doctool commands ==="
-          php artisan list | grep -E "(doctool|vendor:publish)" || echo "No doctool commands found, checking vendor:publish"
+          echo "=== Checking for doctool commands specifically ==="
+          php artisan list | grep -i doctool || echo "No doctool commands found yet"
+          echo "=== Checking provider loaded ==="
+          php artisan config:show providers 2>/dev/null | grep -i DockerTools || echo "Checking via artisan list instead"
 
       - name: Test stub publishing (dry run)
         run: |

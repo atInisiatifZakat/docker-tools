@@ -42,6 +42,13 @@
             "@test"
         ]
     },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Inisiatif\\DockerTools\\DockerToolsServiceProvider"
+            ]
+        }
+    },
     "config": {
         "sort-packages": true
     },
