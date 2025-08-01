@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   app:
-    image: {{:docker_hub_username}}/{{:docker_image_name}}:http-php8.2-latest
+    image: {{:docker_username}}/{{:docker_image_name}}:http-php8.2-latest
     environment:
       - APP_ENV=production
       - APP_DEBUG=false
@@ -30,7 +30,7 @@ services:
       start_period: 40s
 
   worker:
-    image: {{:docker_hub_username}}/{{:docker_image_name}}:worker-php8.2-latest
+    image: {{:docker_username}}/{{:docker_image_name}}:worker-php8.2-latest
     environment:
       - APP_ENV=production
       - APP_DEBUG=false
@@ -52,7 +52,7 @@ services:
         window: 120s
 
   scheduler:
-    image: {{:docker_hub_username}}/{{:docker_image_name}}:scheduler-php8.2-latest
+    image: {{:docker_username}}/{{:docker_image_name}}:scheduler-php8.2-latest
     environment:
       - APP_ENV=production
       - APP_DEBUG=false

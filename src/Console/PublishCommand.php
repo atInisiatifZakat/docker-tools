@@ -94,7 +94,7 @@ class PublishCommand extends Command
     }
 
     /**
-     * Process all files in a single directory (non-recursive)
+     * Process all files in a directory (recursive)
      */
     private function processDirectory(string $path, string $dockerHubUsername, string $appName, string $description): void
     {
@@ -107,14 +107,12 @@ class PublishCommand extends Command
         $this->line("🔄 Processing {$description}...");
 
         try {
-            $files = glob($path . '/*');
+            $files = $this->getAllFiles($path);
             $filesProcessed = 0;
 
             foreach ($files as $file) {
-                if (is_file($file)) {
-                    if ($this->processFile($file, $dockerHubUsername, $appName)) {
-                        $filesProcessed++;
-                    }
+                if ($this->processFile($file, $dockerHubUsername, $appName)) {
+                    $filesProcessed++;
                 }
             }
 
@@ -127,6 +125,25 @@ class PublishCommand extends Command
         } catch (\Exception $e) {
             $this->error("❌ Error processing directory {$path}: " . $e->getMessage());
         }
+    }
+
+    /**
+     * Get all files recursively from a directory
+     */
+    private function getAllFiles(string $directory): array
+    {
+        $files = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if ($file->isFile()) {
+                $files[] = $file->getPathname();
+            }
+        }
+
+        return $files;
     }
 
     /**
