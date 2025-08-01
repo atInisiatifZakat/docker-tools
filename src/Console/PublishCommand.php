@@ -169,7 +169,7 @@ class PublishCommand extends Command
             }
 
             $originalContent = $content;
-            $content = str_replace('{{:docker_hub_username}}', $dockerHubUsername, $content);
+            $content = str_replace('{{:docker_username}}', $dockerHubUsername, $content);
             $content = str_replace('{{:docker_image_name}}', $appName, $content);
 
             // Only write if content changed
