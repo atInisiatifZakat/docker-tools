@@ -36,12 +36,21 @@ jobs:
       - name: Test package installation
         run: |
           cd test-app
-          php artisan list | grep doctool
+          echo "=== Checking if package is installed ==="
+          composer show inisiatif/docker-tools
+          echo "=== Listing all artisan commands ==="
+          php artisan list
+          echo "=== Checking for doctool commands ==="
+          php artisan list | grep -E "(doctool|vendor:publish)" || echo "No doctool commands found, checking vendor:publish"
 
       - name: Test stub publishing (dry run)
         run: |
           cd test-app
           # Test that the command exists and shows help
+          php artisan doctool:publish --help || echo "Command not found, checking if service provider is loaded"
+          echo "=== Checking service providers ==="
+          php artisan package:discover
+          echo "=== Trying command again ==="
           php artisan doctool:publish --help
 
       - name: Test Docker build script
