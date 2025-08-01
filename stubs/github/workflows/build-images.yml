@@ -103,8 +103,8 @@ jobs:
           echo "- Registry: $REGISTRY"
           echo "- Push: $PUSH"
 
-      - name: Make build script executable
-        run: chmod +x ./scripts/build.sh
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader
 
       - name: Build Docker Images
         run: |
@@ -120,8 +120,8 @@ jobs:
             BUILD_ARGS="$BUILD_ARGS --registry ${{ steps.params.outputs.registry }}"
           fi
 
-          echo "Running: ./scripts/build.sh $BUILD_ARGS"
-          ./scripts/build.sh $BUILD_ARGS
+          echo "Running: ./vendor/bin/doctool $BUILD_ARGS"
+          ./vendor/bin/doctool $BUILD_ARGS
 
       - name: Display built images
         run: |
