@@ -3,7 +3,7 @@
 # Menggunakan Debian Slim untuk compatibility yang lebih baik
 
 # Build arguments
-ARG PHP_VERSION=8.2
+ARG PHP_VERSION=8.3
 ARG DEPLOYMENT_MODE=docker-compose
 
 # Base stage dengan PHP dan dependencies

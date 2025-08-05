@@ -1,0 +1,13 @@
+parameters:
+    level: 6
+    paths:
+        - src
+        - tests
+    ignoreErrors:
+        - '#Call to an undefined method Illuminate\\.*#'
+        - '#Access to an undefined property Illuminate\\.*#'
+        -
+            identifier: missingType.iterableValue
+        -
+            identifier: missingType.generics
+    reportUnmatchedIgnoredErrors: false

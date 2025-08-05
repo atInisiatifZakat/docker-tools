@@ -7,7 +7,6 @@ composer.lock
 coverage
 coverage.xml
 docs
-phpstan.neon
 testbench.yaml
 vendor
 node_modules
