@@ -14,15 +14,15 @@ check_supervisord() {
 start_http() {
     echo "Starting HTTP server..."
 
-    # Extract PHP version (default to 8.3 if not set, since 8.1 support removed)
+    # Extract PHP version (default to 8.3 if not set)
     PHP_VERSION=${PHP_VERSION:-8.3}
     PHP_SHORT_VERSION=$(echo "${PHP_VERSION}" | cut -d. -f1,2)
 
     echo "Using PHP version: ${PHP_VERSION} (short: ${PHP_SHORT_VERSION})"
 
     # Validate PHP version is supported
-    if [[ ! "$PHP_SHORT_VERSION" =~ ^8\.[2-3]$ ]]; then
-        echo "Error: Unsupported PHP version '${PHP_VERSION}'. Supported versions: 8.2, 8.3"
+    if [[ ! "$PHP_SHORT_VERSION" =~ ^8\.[1-4]$ ]]; then
+        echo "Error: Unsupported PHP version '${PHP_VERSION}'. Supported versions: 8.1, 8.2, 8.3, 8.4"
         exit 1
     fi
 
