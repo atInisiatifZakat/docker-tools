@@ -29,15 +29,17 @@ services:
       retries: 3
       start_period: 40s
 
-  worker:
-    image: {{:docker_username}}/{{:docker_image_name}}:worker-php8.2-latest
+  artisan:
+    image: {{:docker_username}}/{{:docker_image_name}}:artisan-php8.2-latest
     environment:
       - APP_ENV=production
       - APP_DEBUG=false
       - LOG_CHANNEL=stderr
       - LOG_LEVEL=warning
+    # Override command untuk specific use case
+    command: ["php", "artisan", "queue:work", "--verbose", "--tries=3", "--timeout=90"]
     deploy:
-      replicas: 4
+      replicas: 2
       resources:
         limits:
           memory: 1G
@@ -45,28 +47,6 @@ services:
         reservations:
           memory: 512M
           cpus: '0.5'
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
-
-  scheduler:
-    image: {{:docker_username}}/{{:docker_image_name}}:scheduler-php8.2-latest
-    environment:
-      - APP_ENV=production
-      - APP_DEBUG=false
-      - LOG_CHANNEL=stderr
-      - LOG_LEVEL=warning
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
       restart_policy:
         condition: on-failure
         delay: 5s

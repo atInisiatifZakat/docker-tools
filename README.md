@@ -1,147 +1,257 @@
-# Laravel Docker Tools
+# Docker Tools
 
-[![🧪 Tests](https://github.com/atInisiatifZakat/docker-tools/workflows/🧪%20Tests/badge.svg)](https://github.com/atInisiatifZakat/docker-tools/actions?query=workflow%3A%22🧪%20Tests%22)
-[![🐳 Docker Tests](https://github.com/atInisiatifZakat/docker-tools/workflows/🐳%20Docker%20Tests/badge.svg)](https://github.com/atInisiatifZakat/docker-tools/actions?query=workflow%3A%22🐳%20Docker%20Tests%22)
-[![🔍 Code Quality](https://github.com/atInisiatifZakat/docker-tools/workflows/🔍%20Code%20Quality/badge.svg)](https://github.com/atInisiatifZakat/docker-tools/actions?query=workflow%3A%22🔍%20Code%20Quality%22)
-[![🔄 Compatibility](https://github.com/atInisiatifZakat/docker-tools/workflows/🔄%20Compatibility/badge.svg)](https://github.com/atInisiatifZakat/docker-tools/actions?query=workflow%3A%22🔄%20Compatibility%22)
-[![Latest Stable Version](https://poser.pugx.org/inisiatif/docker-tools/v/stable)](https://packagist.org/packages/inisiatif/docker-tools)
-[![Total Downloads](https://poser.pugx.org/inisiatif/docker-tools/downloads)](https://packagist.org/packages/inisiatif/docker-tools)
-[![License](https://poser.pugx.org/inisiatif/docker-tools/license)](https://packagist.org/packages/inisiatif/docker-tools)
-
-A Laravel package that provides Docker tools and configurations for easy containerization of Laravel applications.
+A comprehensive Docker toolkit for building and deploying Laravel applications with support for multiple PHP versions and deployment environments.
 
 ## Features
 
-- 🐳 **Multi-stage Dockerfile** support for HTTP server, worker, and scheduler
-- 🚀 **GitHub Workflows** for automated building and deployment
-- ⚙️ **Docker Compose** configurations for development and production
-- 🔧 **Automatic placeholder replacement** for Docker Hub username and app names
-- 📦 **Easy publishing** with `doctool:publish` command
-- 🎯 **Support for multiple deployment modes** (Docker Compose, Kubernetes)
-- 🔒 **Built-in security** with proper file permissions and configurations
+- **Multi-stage Docker builds** with HTTP and Artisan stages
+- **PHP versions support**: 8.1, 8.2, 8.3, 8.4
+- **Simple CMD override pattern** for maximum flexibility
+- **Environment compatibility**: VM environments (EC2, Droplets) and cluster environments (K8s, Nomad)
+- **Semantic versioning** with automated build and push
+- **Zero-complexity deployment** with no environment variables required
 
-## Requirements
+## Quick Start
 
-- PHP 8.0 or higher
-- Laravel 9.x, 10.x, 11.x, or 12.x
-- Docker (for using the generated configurations)
-
-## Installation
-
-You can install the package via Composer:
+### 1. Install the Package
 
 ```bash
-composer require inisiatif/docker-tools
+composer require your-vendor/docker-tools
 ```
 
-## Usage
-
-### Publishing Docker Configurations
-
-Use the `doctool:publish` command to publish Docker configurations with automatic placeholder replacement:
+### 2. Publish Docker Files
 
 ```bash
-php artisan doctool:publish
+php artisan docker:publish
 ```
 
-This command will:
-1. Ask for your Docker Hub username
-2. Ask for your application name
-3. Publish all Docker configuration files
-4. Replace placeholders with your actual values
+This creates:
+- `docker/` directory with Dockerfile and configurations
+- `docker-compose.yml` for development
+- `docker-compose.prod.yml` for production
 
-### Direct Publishing (Advanced)
-
-If you want to publish raw configuration files without placeholder replacement:
+### 3. Build Images
 
 ```bash
-# With confirmation prompt
-php artisan vendor:publish --tag=doctool-stubs
+# Build with default settings (PHP 8.3)
+./bin/doctool
 
-# Skip confirmation (assumes you understand you're publishing raw files)
-php artisan vendor:publish --tag=doctool-stubs --force
+# Build with specific PHP version
+./bin/doctool --php-version 8.4
+
+# Build and push to registry
+./bin/doctool --push myregistry/myapp
+
+# Build with semantic versioning
+./bin/doctool --push myregistry/myapp --version 1.2.3
 ```
 
-### Building Docker Images
+## Usage Examples
 
-Use the included build script to create Docker images:
+### Quick Start
 
 ```bash
-# Basic build
-./bin/doctool --app-name myapp --app-version v1.0.0
+# HTTP Server
+docker run -p 8080:8080 myapp:http-php8.3
 
-# Build with registry
-./bin/doctool --registry docker.io/username --app-name myapp --app-version v1.0.0
+# Queue Worker
+docker run myapp:artisan-php8.3 php artisan queue:work --verbose --tries=3
 
-# Build for Kubernetes
-./bin/doctool --mode kubernetes --app-name myapp --app-version v1.0.0
+# Scheduler  
+docker run myapp:artisan-php8.3 php artisan schedule:work
 
-# Show help
-./bin/doctool --help
+# Any Custom Command
+docker run myapp:artisan-php8.3 php artisan migrate --force
 ```
 
-## Published Files
+📋 **For complete deployment examples see**: [examples/](examples/)
+- [Docker Run Commands](examples/docker-run.md) - Single server deployment
+- [Docker Compose](examples/docker-compose.md) - VM environments (EC2, Droplets)  
+- [Kubernetes](examples/kubernetes.md) - Cloud-native deployments
+- [Nomad](examples/nomad.md) - HashiCorp stack deployments
 
-The package publishes the following files:
+## Docker Images
 
-### Docker Configuration
-- `docker/Dockerfile` - Multi-stage Dockerfile
-- `docker/entrypoint.sh` - Smart entrypoint script
-- `docker/caddy/` - Caddy web server configurations
-- `docker/php/` - PHP-FPM configurations
-- `docker/supervisor/` - Supervisor configurations for multi-process containers
+The toolkit builds two types of images:
 
-### Docker Compose
-- `docker-compose.yml` - Development/production compose file
-- `docker-compose.prod.yml` - Production-optimized compose file
+### HTTP Image (`myapp:http-php8.3`)
+- **Purpose**: Web server with PHP-FPM + Caddy
+- **Entrypoint**: Automatically starts HTTP services
+- **Use cases**: Web requests, API endpoints
+- **Port**: 8080
 
-### GitHub Workflows
-- `.github/workflows/build-images.yml` - Automated Docker image building
-- `.github/workflows/release.yml` - Release automation
-- `.github/release-drafter.yml` - Release drafter configuration
+### Artisan Image (`myapp:artisan-php8.3`)  
+- **Purpose**: CLI operations and background tasks
+- **Entrypoint**: Pure command execution via CMD override
+- **Use cases**: Queue workers, schedulers, migrations, custom commands
+- **Port**: None (CLI only)
 
+## Build Tool (`bin/doctool`)
+
+The build script provides semantic versioning and registry management:
+
+```bash
+Usage: ./bin/doctool [OPTIONS]
+
+Options:
+  --php-version VERSION    PHP version to use (8.1, 8.2, 8.3, 8.4)
+                          Default: 8.3
+                          
+  --app-name NAME         Application name for image prefix
+                          Default: current directory name
+                          
+  --push REGISTRY         Build and push to registry
+                          Example: --push myregistry/myapp
+                          
+  --version VERSION       Semantic version (major.minor.patch)
+                          Example: --version 1.2.3
+                          Auto-generates: latest, 1.2.3, 1.2, 1
+                          
+  --help                  Show this help message
+
+Examples:
+  ./bin/doctool                                    # Build locally
+  ./bin/doctool --php-version 8.4                 # Build with PHP 8.4
+  ./bin/doctool --push myregistry/myapp            # Build and push
+  ## PHP Version Support
+
+All major PHP versions are supported with version-specific optimizations:
+
+- **PHP 8.1**: Stable LTS with proven compatibility
+- **PHP 8.2**: Performance improvements and new features  
+- **PHP 8.3**: Latest stable with enhanced performance
+- **PHP 8.4**: Cutting-edge features and optimizations
+
+Each version includes:
+- Optimized PHP-FPM configuration
+- Version-specific extensions
+- Performance tuning for container environments
+
+## Environment Compatibility
+
+### VM Environments
+- **AWS EC2**: Full support with Docker and Docker Compose
+- **DigitalOcean Droplets**: Native Docker support
+- **Azure VMs**: Compatible with container runtimes
+- **Google Compute Engine**: Works with Docker and containerd
+- **On-premises VMs**: Any Linux distribution with Docker
+
+### Cluster Environments  
+- **Kubernetes**: Native support with health checks and resource management
+- **Nomad**: Full job specification support
+- **Docker Swarm**: Service deployment and scaling
+- **Amazon ECS**: Task definitions and service management
+- **Azure Container Instances**: Direct container deployment
+
+## Testing Compatibility
+
+Run the comprehensive compatibility test:
+
+```bash
+# Build images first
+./bin/doctool
+
+# Run compatibility tests
+./test-compatibility.sh
+```
+
+Tests cover:
+- Direct Docker run commands
+- Docker Compose scenarios  
+- Kubernetes simulation
+- Multi-PHP version support
+- Environment variable handling
+
+## File Structure
+
+After running `php artisan docker:publish`:
+
+```
+project/
+├── docker/
+│   ├── Dockerfile              # Multi-stage build definition
+│   ├── entrypoint.sh          # Simple service detection
+│   ├── caddy/
+│   │   └── 8.x/
+│   │       └── Caddyfile      # Web server configuration
+│   └── php/
+│       ├── opcache.ini        # PHP optimization
+│       ├── php.ini           # PHP configuration
+│       └── 8.x/
+│           └── php-fpm.conf  # PHP-FPM pool configuration
+├── docker-compose.yml         # Development composition
+├── docker-compose.prod.yml    # Production composition
+├── bin/
+│   └── doctool               # Build and deployment script
+└── examples/
+    ├── README.md            # Deployment examples index
+    ├── docker-run.md        # Direct Docker run commands
+    ├── docker-compose.md    # Docker Compose for VMs
+    ├── kubernetes.md        # Kubernetes manifests  
+    └── nomad.md             # Nomad job specifications
+```
 ## Configuration
 
-### Supported PHP Versions
-- PHP 8.2
-- PHP 8.3
+The images support standard Laravel environment variables and PHP customizations.
 
-### Supported Deployment Modes
-- **Docker Compose**: Traditional multi-container setup
-- **Kubernetes**: Single-process containers with proper health checks
+📋 **For detailed configuration examples see**: [examples/](examples/)
 
-### Image Types
-- **HTTP**: Web server with Caddy + PHP-FPM
-- **Worker**: Background job processing
-- **Scheduler**: Cron job handling
-
-## Development
-
-### Running Tests
+### Key Environment Variables
 
 ```bash
-composer test
+# Essential Laravel settings
+APP_ENV=production
+APP_KEY=base64:your-key-here
+DB_HOST=database
+DB_DATABASE=laravel
+QUEUE_CONNECTION=redis
+REDIS_HOST=redis
+
+# PHP optimizations  
+PHP_MEMORY_LIMIT=512M
+PHP_OPCACHE_ENABLE=1
 ```
 
-### Test Coverage
+## Best Practices
+
+1. **Use specific versions**: Always tag with semantic versions
+2. **Resource limits**: Set appropriate CPU and memory limits  
+3. **Health checks**: Implement proper liveness and readiness probes
+4. **Single scheduler**: Only run one scheduler instance
+5. **Monitoring**: Use proper logging and monitoring for production
+
+## Troubleshooting
+
+### Quick Debugging
 
 ```bash
-composer test-coverage
+# Check logs
+docker logs <container_name>
+
+# Interactive debugging
+docker run -it myapp:artisan-php8.3 bash
+
+# Test health endpoint
+curl http://localhost:8080/up
 ```
+
+📋 **For detailed troubleshooting see**: [examples/](examples/)
+
+### Getting Help
+
+1. Check the [deployment examples](examples/) for your target platform
+2. Run the compatibility test script: `./test-compatibility.sh`
+3. Review Docker logs for error messages
+4. Verify environment variables are set correctly
 
 ## Contributing
 
-Please see [CONTRIBUTING](CONTRIBUTING.md) for details.
-
-## Security Vulnerabilities
-
-Please review [our security policy](../../security/policy) on how to report security vulnerabilities.
-
-## Credits
-
-- [Nuradiyana](https://github.com/nuradiyana)
-- [All Contributors](../../contributors)
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Ensure all tests pass
+5. Submit a pull request
 
 ## License
 
-The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
+This package is open-sourced software licensed under the [MIT license](LICENSE).

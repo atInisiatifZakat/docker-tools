@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile untuk Laravel dengan support HTTP server dan worker
+# Multi-stage Dockerfile untuk Laravel dengan support HTTP server dan artisan commands
 # Mendukung deployment di Docker, Google Cloud Run, dan Kubernetes
 # Menggunakan Debian Slim untuk compatibility yang lebih baik
 
@@ -27,7 +27,6 @@ RUN apt-get update && apt-get install -y \
     libicu-dev \
     libonig-dev \
     libpq-dev \
-    supervisor \
     nginx-light \
     procps \
     && rm -rf /var/lib/apt/lists/*
@@ -126,17 +125,10 @@ RUN xcaddy build
 
 FROM base AS http
 
-# Build arguments untuk mode switching
-ARG DEPLOYMENT_MODE=docker-compose
-ENV DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
-
 # Install additional dependencies for HTTP server
 RUN apt-get update && apt-get install -y \
     curl \
     ca-certificates \
-    && if [ "$DEPLOYMENT_MODE" = "docker-compose" ]; then \
-        apt-get install -y supervisor; \
-    fi \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Caddy binary from builder
@@ -151,12 +143,8 @@ COPY --from=app /var/www/html /var/www/html
 
 # Copy configurations based on PHP version
 ARG PHP_VERSION
-RUN PHP_SHORT_VERSION=$(echo "${PHP_VERSION}" | cut -d. -f1,2) && \
-    echo "Using PHP version: ${PHP_SHORT_VERSION}"
-
 COPY docker/caddy/ /tmp/caddy/
 COPY docker/php/ /tmp/php/
-COPY docker/supervisor/ /tmp/supervisor/
 
 # Create necessary directories and install version-specific configurations
 RUN PHP_SHORT_VERSION=$(echo "${PHP_VERSION}" | cut -d. -f1,2) && \
@@ -165,28 +153,15 @@ RUN PHP_SHORT_VERSION=$(echo "${PHP_VERSION}" | cut -d. -f1,2) && \
     cp "/tmp/caddy/${PHP_SHORT_VERSION}/Caddyfile" /etc/caddy/Caddyfile && \
     cp "/tmp/php/${PHP_SHORT_VERSION}/php-fpm.conf" "/etc/php/${PHP_SHORT_VERSION}/fpm/pool.d/www.conf"
 
-# Copy supervisor configuration conditionally
-RUN PHP_SHORT_VERSION=$(echo "${PHP_VERSION}" | cut -d. -f1,2) && \
-    if [ "$DEPLOYMENT_MODE" = "docker-compose" ] && [ -f "/tmp/supervisor/${PHP_SHORT_VERSION}/supervisord.conf" ]; then \
-        mkdir -p /etc/supervisor/conf.d && \
-        cp "/tmp/supervisor/${PHP_SHORT_VERSION}/supervisord.conf" /etc/supervisor/conf.d/supervisord.conf; \
-    fi
-
 # Set permissions
 RUN chown -R caddy:caddy /var/www/html
 
-# Create directories conditionally
-RUN mkdir -p /var/run/php && \
-    if [ "$DEPLOYMENT_MODE" = "docker-compose" ]; then \
-        mkdir -p /var/log/supervisor; \
-    fi
+# Create directories
+RUN mkdir -p /var/run/php
 
 # Copy entrypoint script
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-
-# Set service type automatically
-ENV SERVICE_TYPE=http
 
 # Expose port
 EXPOSE 8080
@@ -195,93 +170,19 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/up || exit 1
 
-# Use smart entrypoint
-CMD ["/entrypoint.sh"]
+# Default command to start HTTP server
+CMD ["/entrypoint.sh", "http"]
 
-# Worker stage
-FROM app AS worker
-
-# Build arguments untuk mode switching
-ARG DEPLOYMENT_MODE=docker-compose
-ENV DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
-
-# Install supervisor conditionally
-RUN apt-get update && \
-    if [ "$DEPLOYMENT_MODE" = "docker-compose" ]; then \
-        apt-get install -y supervisor; \
-    fi && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy supervisor configuration conditionally
-COPY docker/supervisor/worker.conf* /tmp/
-RUN if [ "$DEPLOYMENT_MODE" = "docker-compose" ] && [ -f "/tmp/worker.conf" ]; then \
-        mkdir -p /etc/supervisor/conf.d && \
-        cp /tmp/worker.conf /etc/supervisor/conf.d/supervisord.conf; \
-    fi
-
-# Create log directory conditionally
-RUN if [ "$DEPLOYMENT_MODE" = "docker-compose" ]; then \
-        mkdir -p /var/log/supervisor; \
-    fi
+# Artisan stage - untuk menjalankan perintah artisan
+FROM app AS artisan
 
 # Copy entrypoint script
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Set service type environment
-ENV SERVICE_TYPE=worker
-
-# Health check untuk worker
+# Health check untuk artisan (detects php artisan processes)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD pgrep -f "php artisan queue:work" > /dev/null || exit 1
+    CMD pgrep -f "php" > /dev/null || exit 1
 
-# Use smart entrypoint
-CMD ["/entrypoint.sh"]
-
-# Scheduler stage (optional, untuk cron jobs)
-FROM app AS scheduler
-
-# Build arguments untuk mode switching
-ARG DEPLOYMENT_MODE=docker-compose
-ENV DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
-
-# Install supervisor and cron conditionally
-RUN apt-get update && \
-    if [ "$DEPLOYMENT_MODE" = "docker-compose" ]; then \
-        apt-get install -y supervisor cron; \
-    fi && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy supervisor configuration conditionally
-COPY docker/supervisor/scheduler.conf* /tmp/
-RUN if [ "$DEPLOYMENT_MODE" = "docker-compose" ] && [ -f "/tmp/scheduler.conf" ]; then \
-        mkdir -p /etc/supervisor/conf.d && \
-        cp /tmp/scheduler.conf /etc/supervisor/conf.d/supervisord.conf; \
-    fi
-
-# Copy crontab conditionally
-COPY docker/cron/laravel-cron* /tmp/
-RUN if [ "$DEPLOYMENT_MODE" = "docker-compose" ] && [ -f "/tmp/laravel-cron" ]; then \
-        cp /tmp/laravel-cron /etc/cron.d/laravel-cron && \
-        chmod 0644 /etc/cron.d/laravel-cron && \
-        crontab /etc/cron.d/laravel-cron; \
-    fi
-
-# Create log directory conditionally
-RUN if [ "$DEPLOYMENT_MODE" = "docker-compose" ]; then \
-        mkdir -p /var/log/supervisor /var/log/cron; \
-    fi
-
-# Copy entrypoint script
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# Set service type environment
-ENV SERVICE_TYPE=scheduler
-
-# Health check untuk scheduler
-HEALTHCHECK --interval=60s --timeout=3s --start-period=5s --retries=3 \
-    CMD pgrep cron || exit 1
-
-# Use smart entrypoint
-CMD ["/entrypoint.sh"]
+# Default command to show artisan help
+CMD ["php", "artisan", "list"]

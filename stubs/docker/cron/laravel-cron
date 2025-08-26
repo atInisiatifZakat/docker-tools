@@ -1,3 +1,0 @@
-# Laravel Cron Job untuk Debian
-# Run the Laravel scheduler every minute
-* * * * * www-data cd /var/www/html && php artisan schedule:run >> /var/log/cron/laravel.log 2>&1

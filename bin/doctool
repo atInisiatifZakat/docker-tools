@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 
-# Build script untuk membuat Docker images dengan mode switching support
+# Build script untuk membuat Docker images
 set -e
 
 # Default values
 REGISTRY=""
 APP_NAME="app"
 PHP_VERSION="${PHP_VERSION:-8.3}"
-DEPLOYMENT_MODE="docker-compose"
 APP_VERSION="v1.0.0"
 
 # Parse arguments
@@ -15,10 +14,6 @@ while [ $# -gt 0 ]; do
   case $1 in
     --registry)
       REGISTRY="$2"
-      shift 2
-      ;;
-    --mode)
-      DEPLOYMENT_MODE="$2"
       shift 2
       ;;
     --php-version)
@@ -34,9 +29,8 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     --help)
-      echo "Usage: $0 [--registry REGISTRY] [--mode MODE] [--php-version VERSION] [--app-version VERSION] [--app-name NAME]"
+      echo "Usage: $0 [--registry REGISTRY] [--php-version VERSION] [--app-version VERSION] [--app-name NAME]"
       echo "  --registry: Docker registry (e.g., gcr.io/my-project)"
-      echo "  --mode: Deployment mode - 'docker-compose' or 'kubernetes' (default: docker-compose)"
       echo "  --php-version: PHP version (default: 8.3, supports: 8.1, 8.2, 8.3, 8.4)"
       echo "  --app-version: Application version (default: v1.0.0)"
       echo "  --app-name: Application/service name (default: app)"
@@ -47,12 +41,8 @@ while [ $# -gt 0 ]; do
       echo "  1. Latest:          app-php8.3             (overall latest version)"
       echo "  2. Major:           v2-app-php8.3          (latest minor in v2.x.x series)"
       echo ""
-      echo "For Kubernetes mode, all tags get '-k8s' suffix:"
-      echo "  app-php8.3-k8s, v2-app-php8.3-k8s, etc."
-      echo ""
       echo "Examples:"
-      echo "  \$0                                    # Build v1.0.0 with 2 tags each (docker-compose)"
-      echo "  \$0 --mode kubernetes                  # Build v1.0.0 with 2 k8s tags each"
+      echo "  \$0                                    # Build v1.0.0 with 2 tags each"
       echo "  \$0 --php-version 8.3 --app-version v2.1.0  # Build v2.1.0 with semantic tags"
       echo "  \$0 --app-name myapp --app-version v1.5.0    # Build with 'myapp' name"
       echo "  \$0 --registry docker.io/myorg --app-name backend # Build and push all tags"
@@ -68,12 +58,6 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Validate deployment mode
-if [ "$DEPLOYMENT_MODE" != "docker-compose" ] && [ "$DEPLOYMENT_MODE" != "kubernetes" ]; then
-  echo "Error: Invalid deployment mode '$DEPLOYMENT_MODE'. Must be 'docker-compose' or 'kubernetes'"
-  exit 1
-fi
-
 # Validate PHP version
 case "$PHP_VERSION" in
   8.1|8.2|8.3|8.4)
@@ -85,25 +69,18 @@ case "$PHP_VERSION" in
     echo ""
     echo "Please use one of the supported versions:"
     echo "  ./vendor/bin/doctool --php-version 8.1"
-    echo "  ./vendor/bin/doctool --php-version 8.2" 
+    echo "  ./vendor/bin/doctool --php-version 8.2"
     echo "  ./vendor/bin/doctool --php-version 8.3"
     echo "  ./vendor/bin/doctool --php-version 8.4"
     exit 1
     ;;
 esac
-# Set image names with new tag format
-# Format: [versi_aplikasi]-[jenis_image]-php[versi_php]-[target_deployment]
-DEPLOYMENT_SUFFIX=""
-if [ "$DEPLOYMENT_MODE" = "kubernetes" ]; then
-  DEPLOYMENT_SUFFIX="-k8s"
-fi
 
 # Function to generate semantic version tags
 generate_version_tags() {
   local app_version="$1"
   local image_type="$2"
   local php_version="$3"
-  local deployment_suffix="$4"
 
   # Extract version parts (remove 'v' prefix if exists)
   local version_clean=$(echo "$app_version" | sed 's/^v//')
@@ -113,25 +90,23 @@ generate_version_tags() {
   local tags=""
 
   # 1. Latest tag: http-php8.3 (points to overall latest)
-  tags="$tags ${image_type}-php${php_version}${deployment_suffix}"
+  tags="$tags ${image_type}-php${php_version}"
 
-  # 3. Major tag: v2-http-php8.3 (points to latest minor.patch)
+  # 2. Major tag: v2-http-php8.3 (points to latest minor.patch)
   if [ -n "$major" ]; then
-    tags="$tags v${major}-${image_type}-php${php_version}${deployment_suffix}"
+    tags="$tags v${major}-${image_type}-php${php_version}"
   fi
 
   echo "$tags"
 }
 
 # Generate tags for each image type
-HTTP_TAGS=$(generate_version_tags "$APP_VERSION" "http" "$PHP_VERSION" "$DEPLOYMENT_SUFFIX")
-WORKER_TAGS=$(generate_version_tags "$APP_VERSION" "worker" "$PHP_VERSION" "$DEPLOYMENT_SUFFIX")
-SCHEDULER_TAGS=$(generate_version_tags "$APP_VERSION" "scheduler" "$PHP_VERSION" "$DEPLOYMENT_SUFFIX")
+HTTP_TAGS=$(generate_version_tags "$APP_VERSION" "http" "$PHP_VERSION")
+ARTISAN_TAGS=$(generate_version_tags "$APP_VERSION" "artisan" "$PHP_VERSION")
 
 # Get primary tags (first tag in each list) for image naming
 HTTP_TAG=$(echo $HTTP_TAGS | cut -d' ' -f1)
-WORKER_TAG=$(echo $WORKER_TAGS | cut -d' ' -f1)
-SCHEDULER_TAG=$(echo $SCHEDULER_TAGS | cut -d' ' -f1)
+ARTISAN_TAG=$(echo $ARTISAN_TAGS | cut -d' ' -f1)
 
 if [ -n "$REGISTRY" ]; then
     case "$REGISTRY" in
@@ -144,44 +119,38 @@ if [ -n "$REGISTRY" ]; then
                 */*)
                     # App name already contains namespace, use as-is without registry prefix
                     HTTP_IMAGE="${APP_NAME}:${HTTP_TAG}"
-                    WORKER_IMAGE="${APP_NAME}:${WORKER_TAG}"
-                    SCHEDULER_IMAGE="${APP_NAME}:${SCHEDULER_TAG}"
+                    ARTISAN_IMAGE="${APP_NAME}:${ARTISAN_TAG}"
                     ;;
                 *)
                     # Simple app name, combine with registry namespace
                     HTTP_IMAGE="${REGISTRY_CLEAN}/${APP_NAME}:${HTTP_TAG}"
-                    WORKER_IMAGE="${REGISTRY_CLEAN}/${APP_NAME}:${WORKER_TAG}"
-                    SCHEDULER_IMAGE="${REGISTRY_CLEAN}/${APP_NAME}:${SCHEDULER_TAG}"
+                    ARTISAN_IMAGE="${REGISTRY_CLEAN}/${APP_NAME}:${ARTISAN_TAG}"
                     ;;
             esac
             ;;
         *)
             # For other registries, always use namespace format
             HTTP_IMAGE="${REGISTRY}/${APP_NAME}:${HTTP_TAG}"
-            WORKER_IMAGE="${REGISTRY}/${APP_NAME}:${WORKER_TAG}"
-            SCHEDULER_IMAGE="${REGISTRY}/${APP_NAME}:${SCHEDULER_TAG}"
+            ARTISAN_IMAGE="${REGISTRY}/${APP_NAME}:${ARTISAN_TAG}"
             ;;
     esac
 else
     # Local images - use app name as-is (supports namespace)
     HTTP_IMAGE="${APP_NAME}:${HTTP_TAG}"
-    WORKER_IMAGE="${APP_NAME}:${WORKER_TAG}"
-    SCHEDULER_IMAGE="${APP_NAME}:${SCHEDULER_TAG}"
+    ARTISAN_IMAGE="${APP_NAME}:${ARTISAN_TAG}"
 fi
 
-echo "Building Docker images with mode: $DEPLOYMENT_MODE"
+echo "Building Docker images"
 echo "Application Name: $APP_NAME"
 echo "Application Version: $APP_VERSION"
 echo "PHP Version: $PHP_VERSION"
 echo "HTTP Image: $HTTP_IMAGE"
-echo "Worker Image: $WORKER_IMAGE"
-echo "Scheduler Image: $SCHEDULER_IMAGE"
+echo "Artisan Image: $ARTISAN_IMAGE"
 echo ""
 
 # Build HTTP server image
 echo "Building HTTP server image..."
 docker build --target http \
-  --build-arg DEPLOYMENT_MODE="$DEPLOYMENT_MODE" \
   --build-arg PHP_VERSION="$PHP_VERSION" \
   -t "$HTTP_IMAGE" \
   -f docker/Dockerfile .
@@ -213,72 +182,36 @@ for tag in $HTTP_TAGS; do
   fi
 done
 
-# Build Worker image
-echo "Building Worker image..."
-docker build --target worker \
-  --build-arg DEPLOYMENT_MODE="$DEPLOYMENT_MODE" \
+# Build Artisan image
+echo "Building Artisan image..."
+docker build --target artisan \
   --build-arg PHP_VERSION="$PHP_VERSION" \
-  -t "$WORKER_IMAGE" \
+  -t "$ARTISAN_IMAGE" \
   -f docker/Dockerfile .
 
-# Create additional tags for Worker image
-echo "Creating additional tags for Worker image..."
-for tag in $WORKER_TAGS; do
-  if [ "$tag" != "$WORKER_TAG" ]; then
+# Create additional tags for Artisan image
+echo "Creating additional tags for Artisan image..."
+for tag in $ARTISAN_TAGS; do
+  if [ "$tag" != "$ARTISAN_TAG" ]; then
     if [ -n "$REGISTRY" ]; then
       case "$REGISTRY" in
         docker.io/*)
           REGISTRY_CLEAN=$(echo $REGISTRY | sed 's|docker.io/||')
           case "$APP_NAME" in
             */*)
-              docker tag "$WORKER_IMAGE" "${APP_NAME}:${tag}"
+              docker tag "$ARTISAN_IMAGE" "${APP_NAME}:${tag}"
               ;;
             *)
-              docker tag "$WORKER_IMAGE" "${REGISTRY_CLEAN}/${APP_NAME}:${tag}"
+              docker tag "$ARTISAN_IMAGE" "${REGISTRY_CLEAN}/${APP_NAME}:${tag}"
               ;;
           esac
           ;;
         *)
-          docker tag "$WORKER_IMAGE" "${REGISTRY}/${APP_NAME}:${tag}"
+          docker tag "$ARTISAN_IMAGE" "${REGISTRY}/${APP_NAME}:${tag}"
           ;;
       esac
     else
-      docker tag "$WORKER_IMAGE" "${APP_NAME}:${tag}"
-    fi
-  fi
-done
-
-# Build Scheduler image
-echo "Building Scheduler image..."
-docker build --target scheduler \
-  --build-arg DEPLOYMENT_MODE="$DEPLOYMENT_MODE" \
-  --build-arg PHP_VERSION="$PHP_VERSION" \
-  -t "$SCHEDULER_IMAGE" \
-  -f docker/Dockerfile .
-
-# Create additional tags for Scheduler image
-echo "Creating additional tags for Scheduler image..."
-for tag in $SCHEDULER_TAGS; do
-  if [ "$tag" != "$SCHEDULER_TAG" ]; then
-    if [ -n "$REGISTRY" ]; then
-      case "$REGISTRY" in
-        docker.io/*)
-          REGISTRY_CLEAN=$(echo $REGISTRY | sed 's|docker.io/||')
-          case "$APP_NAME" in
-            */*)
-              docker tag "$SCHEDULER_IMAGE" "${APP_NAME}:${tag}"
-              ;;
-            *)
-              docker tag "$SCHEDULER_IMAGE" "${REGISTRY_CLEAN}/${APP_NAME}:${tag}"
-              ;;
-          esac
-          ;;
-        *)
-          docker tag "$SCHEDULER_IMAGE" "${REGISTRY}/${APP_NAME}:${tag}"
-          ;;
-      esac
-    else
-      docker tag "$SCHEDULER_IMAGE" "${APP_NAME}:${tag}"
+      docker tag "$ARTISAN_IMAGE" "${APP_NAME}:${tag}"
     fi
   fi
 done
@@ -311,30 +244,9 @@ if [ -n "$REGISTRY" ]; then
     esac
   done
 
-  # Push Worker image with all tags
-  echo "Pushing Worker image tags..."
-  for tag in $WORKER_TAGS; do
-    case "$REGISTRY" in
-      docker.io/*)
-        REGISTRY_CLEAN=$(echo $REGISTRY | sed 's|docker.io/||')
-        case "$APP_NAME" in
-          */*)
-            docker push "${APP_NAME}:${tag}"
-            ;;
-          *)
-            docker push "${REGISTRY_CLEAN}/${APP_NAME}:${tag}"
-            ;;
-        esac
-        ;;
-      *)
-        docker push "${REGISTRY}/${APP_NAME}:${tag}"
-        ;;
-    esac
-  done
-
-  # Push Scheduler image with all tags
-  echo "Pushing Scheduler image tags..."
-  for tag in $SCHEDULER_TAGS; do
+  # Push Artisan image with all tags
+  echo "Pushing Artisan image tags..."
+  for tag in $ARTISAN_TAGS; do
     case "$REGISTRY" in
       docker.io/*)
         REGISTRY_CLEAN=$(echo $REGISTRY | sed 's|docker.io/||')
@@ -384,33 +296,8 @@ for tag in $HTTP_TAGS; do
 done
 
 echo ""
-echo "Worker tags:"
-for tag in $WORKER_TAGS; do
-  if [ -n "$REGISTRY" ]; then
-    case "$REGISTRY" in
-      docker.io/*)
-        REGISTRY_CLEAN=$(echo $REGISTRY | sed 's|docker.io/||')
-        case "$APP_NAME" in
-          */*)
-            echo "  ${APP_NAME}:${tag}"
-            ;;
-          *)
-            echo "  ${REGISTRY_CLEAN}/${APP_NAME}:${tag}"
-            ;;
-        esac
-        ;;
-      *)
-        echo "  ${REGISTRY}/${APP_NAME}:${tag}"
-        ;;
-    esac
-  else
-    echo "  ${APP_NAME}:${tag}"
-  fi
-done
-
-echo ""
-echo "Scheduler tags:"
-for tag in $SCHEDULER_TAGS; do
+echo "Artisan tags:"
+for tag in $ARTISAN_TAGS; do
   if [ -n "$REGISTRY" ]; then
     case "$REGISTRY" in
       docker.io/*)
@@ -434,10 +321,6 @@ for tag in $SCHEDULER_TAGS; do
 done
 echo ""
 echo "Usage examples:"
-if [ "$DEPLOYMENT_MODE" = "docker-compose" ]; then
-  echo "  Docker Compose: docker-compose up -d"
-  echo "  Single container: docker run -p 8080:8080 $HTTP_IMAGE"
-else
-  echo "  Kubernetes: kubectl apply -f k8s-deployment.yaml"
-  echo "  Single container: docker run -e K8S_MODE=true -p 8080:8080 $HTTP_IMAGE"
-fi
+echo "  Docker Compose: docker-compose up -d"
+echo "  HTTP Server: docker run -p 8080:8080 $HTTP_IMAGE"
+echo "  Artisan Command: docker run $ARTISAN_IMAGE php artisan queue:work"
