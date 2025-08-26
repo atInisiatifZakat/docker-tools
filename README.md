@@ -16,13 +16,13 @@ A comprehensive Docker toolkit for building and deploying Laravel applications w
 ### 1. Install the Package
 
 ```bash
-composer require your-vendor/docker-tools
+composer require inisiatif/docker-tools
 ```
 
 ### 2. Publish Docker Files
 
 ```bash
-php artisan docker:publish
+php artisan doctool:publish
 ```
 
 This creates:
